@@ -435,7 +435,7 @@ window.setBaseline = function(zone) {
 };
 
 // =================================================================
-// 5. PERBAIKAN ENGINE SINKRONISASI TABEL HISTORY (COMPAT FIX)
+// 5. PERBAIKAN ENGINE SINKRONISASI TABEL HISTORY (SESUAI FORMAT ESP32)
 // =================================================================
 db.ref('riwayat_heater').limitToLast(200).on('value', (snapshot) => {
   const logData = snapshot.val();
@@ -453,8 +453,17 @@ db.ref('riwayat_heater').limitToLast(200).on('value', (snapshot) => {
         });
       }
       
-      const avgUpper = ((log.upper_rs || 0) + (log.upper_st || 0) + (log.upper_tr || 0)) / 3;
-      const avgLower = ((log.lower_rs || 0) + (log.lower_st || 0) + (log.lower_tr || 0)) / 3;
+      // Menyesuaikan dengan payload JSON dari ESP32 (ct1, ct2, ct3 untuk Upper)
+      const ct1_val = log.ct1 || 0;
+      const ct2_val = log.ct2 || 0;
+      const ct3_val = log.ct3 || 0;
+      const avgUpper = (ct1_val + ct2_val + ct3_val) / 3;
+
+      // Menyesuaikan dengan payload JSON dari ESP32 (ct4, ct5, ct6 untuk Lower)
+      const ct4_val = log.ct4 || 0;
+      const ct5_val = log.ct5 || 0;
+      const ct6_val = log.ct6 || 0;
+      const avgLower = (ct4_val + ct5_val + ct6_val) / 3;
 
       const tentukanStatusLog = (avgArus, baseline) => {
         if (avgArus < 1.0) return "OFF";
@@ -464,6 +473,7 @@ db.ref('riwayat_heater').limitToLast(200).on('value', (snapshot) => {
         return "NORMAL";
       };
 
+      // Push Data Upper Mold ke baris tabel
       window.rawHistoryData.push({
         timestamp: tanggalLokal,
         zona: "Upper Mold",
@@ -472,6 +482,7 @@ db.ref('riwayat_heater').limitToLast(200).on('value', (snapshot) => {
         status: tentukanStatusLog(avgUpper, baselineUpper)
       });
 
+      // Push Data Lower Mold ke baris tabel
       window.rawHistoryData.push({
         timestamp: tanggalLokal,
         zona: "Lower Mold",
