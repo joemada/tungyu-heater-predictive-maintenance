@@ -437,8 +437,6 @@ window.setBaseline = function(zone) {
 // =================================================================
 // 5. MENAMPILKAN DATA ASLI FIREBASE KE TABEL MANAJEMEN HISTORY (FIXED)
 // =================================================================
-
-// Gunakan syntax firebase compat standar yang konsisten dengan bagian monitoring
 db.ref('riwayat_heater').limitToLast(200).on('value', (snapshot) => {
   const logData = snapshot.val();
   window.rawHistoryData = []; // Reset penampung data lokal setiap ada update
@@ -460,19 +458,9 @@ db.ref('riwayat_heater').limitToLast(200).on('value', (snapshot) => {
         });
       }
       
-      // 2. Ambil objek bungkusan "data" dari JSON Firebase (CT1 - CT6)
-      const payloadData = log.data || {};
-
-      // Jika tidak ada data, beri nilai default 0
-      const ct1_val = payloadData.ct1 || 0;
-      const ct2_val = payloadData.ct2 || 0;
-      const ct3_val = payloadData.ct3 || 0;
-      const avgUpper = (ct1_val + ct2_val + ct3_val) / 3;
-
-      const ct4_val = payloadData.ct4 || 0;
-      const ct5_val = payloadData.ct5 || 0;
-      const ct6_val = payloadData.ct6 || 0;
-      const avgLower = (ct4_val + ct5_val + ct6_val) / 3;
+      // 2. Hitung Rata-rata Arus Sesuai Struktur Aktual Firebase Anda (upper_rs, lower_rs, dsb)
+      const avgUpper = ((log.upper_rs || 0) + (log.upper_st || 0) + (log.upper_tr || 0)) / 3;
+      const avgLower = ((log.lower_rs || 0) + (log.lower_st || 0) + (log.lower_tr || 0)) / 3;
 
       // Fungsi bantu internal untuk menentukan status berdasarkan baseline adaptif dashboard
       const tentukanStatusLog = (avgArus, baseline) => {
@@ -483,29 +471,29 @@ db.ref('riwayat_heater').limitToLast(200).on('value', (snapshot) => {
         return "NORMAL";
       };
 
-      // 3. Masukkan Data Upper Mold ke Array History (Simpan sebagai tipe Number murni)
+      // 3. Masukkan Data Upper Mold ke Array History (Simpan angka murni, JANGAN di .toFixed dulu)
       window.rawHistoryData.push({
         timestamp: tanggalLokal,
         zona: "Upper Mold",
-        ctCode: "CT1, CT2, CT3",
-        arus: avgUpper, 
+        ctCode: "CT1, CT2, CT3 (RS, ST, TR)",
+        arus: avgUpper,
         status: tentukanStatusLog(avgUpper, baselineUpper)
       });
 
-      // 4. Masukkan Data Lower Mold ke Array History (Simpan sebagai tipe Number murni)
+      // 4. Masukkan Data Lower Mold ke Array History
       window.rawHistoryData.push({
         timestamp: tanggalLokal,
         zona: "Lower Mold",
-        ctCode: "CT4, CT5, CT6",
+        ctCode: "CT4, CT5, CT6 (RS, ST, TR)",
         arus: avgLower,
         status: tentukanStatusLog(avgLower, baselineLower)
       });
     });
 
-    // Balik urutan array agar data yang paling baru muncul di baris paling atas
+    // Balik urutan array agar data log paling baru muncul di baris paling atas
     window.rawHistoryData.reverse();
 
-    // Panggil fungsi render untuk memperbarui tampilan UI tabel
+    // Jalankan fungsi render untuk memperbarui tampilan tabel ke layar
     renderHistoryTable(window.rawHistoryData);
   } else {
     document.getElementById('table-history-body').innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">Tidak ada data riwayat tersimpan di database.</td></tr>`;
@@ -513,7 +501,7 @@ db.ref('riwayat_heater').limitToLast(200).on('value', (snapshot) => {
 });
 
 // =================================================================
-// 6. ENGINE FILTER & RENDERING DATA LOGSHEET (FIXED PROPERTY & TYPE)
+// 6. ENGINE FILTER & RENDERING DATA LOGSHEET (PERBAIKAN VARIABEL & FORM-TEKS)
 // =================================================================
 window.applyFilters = function() {
   const dateVal = document.getElementById('filter-date').value;
@@ -559,7 +547,8 @@ function renderHistoryTable(dataArray) {
     else if(item.status.includes("WARNING")) badgeClass = "bg-orange-100 text-orange-800 font-bold";
     else if(item.status === "OFF") badgeClass = "bg-gray-100 text-gray-800";
 
-    // PERBAIKAN: Menggunakan item.timestamp dan memformat item.arus secara aman dengan Number()
+    // PERBAIKAN FATAL: Memanggil item.timestamp (bukan timestampDisplay) 
+    // dan memaksa konversi ke Number sebelum .toFixed(3) agar browser tidak error.
     const row = `
       <tr class="hover:bg-slate-50 transition">
         <td class="p-3 font-semibold text-slate-600">${item.timestamp}</td>
