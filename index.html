@@ -435,7 +435,7 @@ window.setBaseline = function(zone) {
 };
 
 // =================================================================
-// 5. PERBAIKAN ENGINE SINKRONISASI TABEL HISTORY (SESUAI FORMAT ESP32)
+// 5. PERBAIKAN ENGINE SINKRONISASI TABEL HISTORY (FIX BUNGKUSAN DATA)
 // =================================================================
 db.ref('riwayat_heater').limitToLast(200).on('value', (snapshot) => {
   const logData = snapshot.val();
@@ -453,16 +453,18 @@ db.ref('riwayat_heater').limitToLast(200).on('value', (snapshot) => {
         });
       }
       
-      // Menyesuaikan dengan payload JSON dari ESP32 (ct1, ct2, ct3 untuk Upper)
-      const ct1_val = log.ct1 || 0;
-      const ct2_val = log.ct2 || 0;
-      const ct3_val = log.ct3 || 0;
+      // Ambil objek bungkusan "data" dari JSON Firebase
+      const payloadData = log.data || {};
+      
+      // Mengambil nilai CT dari dalam objek data (jika tidak ada, default ke 0)
+      const ct1_val = payloadData.ct1 || 0;
+      const ct2_val = payloadData.ct2 || 0;
+      const ct3_val = payloadData.ct3 || 0;
       const avgUpper = (ct1_val + ct2_val + ct3_val) / 3;
 
-      // Menyesuaikan dengan payload JSON dari ESP32 (ct4, ct5, ct6 untuk Lower)
-      const ct4_val = log.ct4 || 0;
-      const ct5_val = log.ct5 || 0;
-      const ct6_val = log.ct6 || 0;
+      const ct4_val = payloadData.ct4 || 0;
+      const ct5_val = payloadData.ct5 || 0;
+      const ct6_val = payloadData.ct6 || 0;
       const avgLower = (ct4_val + ct5_val + ct6_val) / 3;
 
       const tentukanStatusLog = (avgArus, baseline) => {
@@ -473,7 +475,7 @@ db.ref('riwayat_heater').limitToLast(200).on('value', (snapshot) => {
         return "NORMAL";
       };
 
-      // Push Data Upper Mold ke baris tabel
+      // Push Data Upper Mold ke baris array tabel
       window.rawHistoryData.push({
         timestamp: tanggalLokal,
         zona: "Upper Mold",
@@ -482,7 +484,7 @@ db.ref('riwayat_heater').limitToLast(200).on('value', (snapshot) => {
         status: tentukanStatusLog(avgUpper, baselineUpper)
       });
 
-      // Push Data Lower Mold ke baris tabel
+      // Push Data Lower Mold ke baris array tabel
       window.rawHistoryData.push({
         timestamp: tanggalLokal,
         zona: "Lower Mold",
@@ -492,13 +494,14 @@ db.ref('riwayat_heater').limitToLast(200).on('value', (snapshot) => {
       });
     });
 
+    // Balik urutan agar data log paling baru berada di paling atas
     window.rawHistoryData.reverse();
     renderHistoryTable(window.rawHistoryData);
   } else {
     document.getElementById('table-history-body').innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">Tidak ada data riwayat tersimpan di database.</td></tr>`;
   }
 });
-
+    
 // =================================================================
 // 6. ENGINE FILTER & RENDERING DATA LOGSHEET
 // =================================================================
