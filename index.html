@@ -435,28 +435,35 @@ window.setBaseline = function(zone) {
 };
 
 // =================================================================
-// 5. PERBAIKAN ENGINE SINKRONISASI TABEL HISTORY (FIX BUNGKUSAN DATA)
+// 5. MENAMPILKAN DATA ASLI FIREBASE KE TABEL MANAJEMEN HISTORY (FIXED)
 // =================================================================
+
+// Gunakan syntax firebase compat standar yang konsisten dengan bagian monitoring
 db.ref('riwayat_heater').limitToLast(200).on('value', (snapshot) => {
   const logData = snapshot.val();
-  window.rawHistoryData = [];
+  window.rawHistoryData = []; // Reset penampung data lokal setiap ada update
 
   if (logData) {
     Object.keys(logData).forEach((key) => {
       const log = logData[key];
       
+      // 1. Konversi Nilai Timestamp Milidetik ke Format Tanggal Lokal Indonesia
       let tanggalLokal = "Mencatat...";
       if (log.timestamp) {
         tanggalLokal = new Date(log.timestamp).toLocaleString('id-ID', {
-          year: 'numeric', month: '2-digit', day: '2-digit',
-          hour: '2-digit', minute: '2-digit', second: '2-digit'
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
         });
       }
       
-      // Ambil objek bungkusan "data" dari JSON Firebase
+      // 2. Ambil objek bungkusan "data" dari JSON Firebase (CT1 - CT6)
       const payloadData = log.data || {};
-      
-      // Mengambil nilai CT dari dalam objek data (jika tidak ada, default ke 0)
+
+      // Jika tidak ada data, beri nilai default 0
       const ct1_val = payloadData.ct1 || 0;
       const ct2_val = payloadData.ct2 || 0;
       const ct3_val = payloadData.ct3 || 0;
@@ -467,24 +474,25 @@ db.ref('riwayat_heater').limitToLast(200).on('value', (snapshot) => {
       const ct6_val = payloadData.ct6 || 0;
       const avgLower = (ct4_val + ct5_val + ct6_val) / 3;
 
+      // Fungsi bantu internal untuk menentukan status berdasarkan baseline adaptif dashboard
       const tentukanStatusLog = (avgArus, baseline) => {
-        if (avgArus < 1.0) return "OFF";
+        if (avgArus < 1.0) return "OFF"; // Jika arus sangat kecil, heater mati
         const dropPct = ((baseline - avgArus) / baseline) * 100;
         if (dropPct >= 30.0) return "CRITICAL";
         if (dropPct >= 15.0) return "WARNING";
         return "NORMAL";
       };
 
-      // Push Data Upper Mold ke baris array tabel
+      // 3. Masukkan Data Upper Mold ke Array History (Simpan sebagai tipe Number murni)
       window.rawHistoryData.push({
         timestamp: tanggalLokal,
         zona: "Upper Mold",
         ctCode: "CT1, CT2, CT3",
-        arus: avgUpper,
+        arus: avgUpper, 
         status: tentukanStatusLog(avgUpper, baselineUpper)
       });
 
-      // Push Data Lower Mold ke baris array tabel
+      // 4. Masukkan Data Lower Mold ke Array History (Simpan sebagai tipe Number murni)
       window.rawHistoryData.push({
         timestamp: tanggalLokal,
         zona: "Lower Mold",
@@ -494,16 +502,18 @@ db.ref('riwayat_heater').limitToLast(200).on('value', (snapshot) => {
       });
     });
 
-    // Balik urutan agar data log paling baru berada di paling atas
+    // Balik urutan array agar data yang paling baru muncul di baris paling atas
     window.rawHistoryData.reverse();
+
+    // Panggil fungsi render untuk memperbarui tampilan UI tabel
     renderHistoryTable(window.rawHistoryData);
   } else {
     document.getElementById('table-history-body').innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">Tidak ada data riwayat tersimpan di database.</td></tr>`;
   }
 });
-    
+
 // =================================================================
-// 6. ENGINE FILTER & RENDERING DATA LOGSHEET
+// 6. ENGINE FILTER & RENDERING DATA LOGSHEET (FIXED PROPERTY & TYPE)
 // =================================================================
 window.applyFilters = function() {
   const dateVal = document.getElementById('filter-date').value;
@@ -518,10 +528,10 @@ window.applyFilters = function() {
     filtered = filtered.filter(item => item.timestamp.includes(formattedDateStr));
   }
   if (toolVal !== "all") {
-    filtered = filtered.filter(item => item.zona.includes(toolVal));
+    filtered = filtered.filter(item => item.zona.toLowerCase().includes(toolVal.toLowerCase()));
   }
   if (statusVal !== "all") {
-    filtered = filtered.filter(item => item.status === statusVal);
+    filtered = filtered.filter(item => item.status.includes(statusVal));
   }
 
   renderHistoryTable(filtered);
@@ -536,7 +546,6 @@ window.resetFilters = function() {
 
 function renderHistoryTable(dataArray) {
   const tbody = document.getElementById('table-history-body');
-  if (!tbody) return;
   tbody.innerHTML = "";
 
   if(dataArray.length === 0) {
@@ -546,23 +555,24 @@ function renderHistoryTable(dataArray) {
 
   dataArray.forEach(item => {
     let badgeClass = "bg-green-100 text-green-800";
-    if(item.status === "CRITICAL") badgeClass = "bg-red-100 text-red-800 font-bold animate-pulse";
-    else if(item.status === "WARNING") badgeClass = "bg-orange-100 text-orange-800 font-bold";
+    if(item.status.includes("CRITICAL")) badgeClass = "bg-red-100 text-red-800 font-bold animate-pulse";
+    else if(item.status.includes("WARNING")) badgeClass = "bg-orange-100 text-orange-800 font-bold";
     else if(item.status === "OFF") badgeClass = "bg-gray-100 text-gray-800";
 
+    // PERBAIKAN: Menggunakan item.timestamp dan memformat item.arus secara aman dengan Number()
     const row = `
       <tr class="hover:bg-slate-50 transition">
         <td class="p-3 font-semibold text-slate-600">${item.timestamp}</td>
         <td class="p-3">${item.zona}</td>
         <td class="p-3"><span class="px-2 py-0.5 rounded bg-slate-200 font-mono text-xs">${item.ctCode}</span></td>
-        <td class="p-3 font-bold">${item.arus.toFixed(3)} A</td>
+        <td class="p-3 font-bold">${Number(item.arus).toFixed(3)} A</td>
         <td class="p-3"><span class="px-2.5 py-1 rounded-full text-xs font-semibold ${badgeClass}">${item.status}</span></td>
       </tr>
     `;
     tbody.innerHTML += row;
   });
 }
-
+    
 // =================================================================
 // 7. SINKRONISASI DATA MULTIPLIER & REMOTE CALIBRATION
 // =================================================================
